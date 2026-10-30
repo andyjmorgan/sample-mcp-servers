@@ -1,0 +1,220 @@
+// Package mcpserve holds the plumbing shared by every sample server: env
+// config, the stateless Streamable HTTP handler pinned to one protocol
+// version, and the auth layers (Keycloak/CIMD bearer tokens, X-Api-Key).
+package mcpserve
+
+import (
+	"context"
+	"crypto/subtle"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+	_ "time/tzdata" // IANA zones without relying on the base image
+
+	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/modelcontextprotocol/go-sdk/auth"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/modelcontextprotocol/go-sdk/oauthex"
+)
+
+// Spec describes one sample server.
+type Spec struct {
+	Name            string
+	Version         string
+	ProtocolVersion string // the only version the server advertises
+	JSONResponse    bool   // reply with application/json instead of SSE
+	Register        func(*mcp.Server)
+}
+
+// Config is read from the environment.
+//
+//	PORT            listen port (default 8080)
+//	PUBLIC_URL      external base URL, e.g. https://mcp-time.donkeywork.dev
+//	OAUTH_ISSUER    Keycloak realm issuer; enables bearer-token auth when set
+//	OAUTH_JWKS_URL  JWKS endpoint (default: <issuer>/protocol/openid-connect/certs)
+//	OAUTH_SCOPE     scope the token must carry (also advertised in PRM)
+//	API_KEY         when set, requests must also send a matching X-Api-Key
+type Config struct {
+	Port      string
+	PublicURL string
+	Issuer    string
+	JWKSURL   string
+	Scope     string
+	APIKey    string
+}
+
+func configFromEnv() Config {
+	c := Config{
+		Port:      getenv("PORT", "8080"),
+		PublicURL: strings.TrimRight(os.Getenv("PUBLIC_URL"), "/"),
+		Issuer:    os.Getenv("OAUTH_ISSUER"),
+		JWKSURL:   os.Getenv("OAUTH_JWKS_URL"),
+		Scope:     os.Getenv("OAUTH_SCOPE"),
+		APIKey:    os.Getenv("API_KEY"),
+	}
+	if c.Issuer != "" && c.JWKSURL == "" {
+		c.JWKSURL = strings.TrimRight(c.Issuer, "/") + "/protocol/openid-connect/certs"
+	}
+	if c.PublicURL == "" {
+		c.PublicURL = "http://localhost:" + c.Port
+	}
+	return c
+}
+
+func getenv(k, def string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
+}
+
+// Run serves the MCP endpoint at /mcp until the process exits.
+func Run(spec Spec) {
+	log := slog.New(slog.NewJSONHandler(os.Stdout, nil)).With("server", spec.Name)
+	cfg := configFromEnv()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: spec.Name, Version: spec.Version}, &mcp.ServerOptions{
+		SupportedProtocolVersions: []string{spec.ProtocolVersion},
+	})
+	spec.Register(server)
+
+	var handler http.Handler = mcp.NewStreamableHTTPHandler(
+		func(*http.Request) *mcp.Server { return server },
+		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: spec.JSONResponse},
+	)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
+
+	resource := cfg.PublicURL + "/mcp"
+	if cfg.APIKey != "" {
+		handler = requireAPIKey(cfg.APIKey, handler)
+	}
+	if cfg.Issuer != "" {
+		prmURL := cfg.PublicURL + "/.well-known/oauth-protected-resource/mcp"
+		var scopes []string
+		if cfg.Scope != "" {
+			scopes = []string{cfg.Scope}
+		}
+		prm := auth.ProtectedResourceMetadataHandler(&oauthex.ProtectedResourceMetadata{
+			Resource:               resource,
+			AuthorizationServers:   []string{cfg.Issuer},
+			ScopesSupported:        scopes,
+			BearerMethodsSupported: []string{"header"},
+			ResourceName:           spec.Name,
+		})
+		// RFC 9728 path-aware location first, root location for older clients.
+		mux.Handle("/.well-known/oauth-protected-resource/mcp", prm)
+		mux.Handle("/.well-known/oauth-protected-resource", prm)
+
+		verifier := newVerifier(cfg, resource)
+		handler = auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{
+			ResourceMetadataURL: prmURL,
+			Scopes:              scopes,
+		})(handler)
+	}
+	mux.Handle("/mcp", handler)
+
+	log.Info("listening", "port", cfg.Port, "protocol", spec.ProtocolVersion, "resource", resource,
+		"oauth", cfg.Issuer != "", "scope", cfg.Scope, "apiKey", cfg.APIKey != "", "jsonResponse", spec.JSONResponse)
+	srv := &http.Server{Addr: ":" + cfg.Port, Handler: logRequests(log, mux), ReadHeaderTimeout: 10 * time.Second}
+	if err := srv.ListenAndServe(); err != nil {
+		log.Error("server stopped", "err", err)
+		os.Exit(1)
+	}
+}
+
+// newVerifier validates Keycloak access tokens: signature via JWKS, issuer,
+// expiry, and an audience that names this server's resource URL.
+func newVerifier(cfg Config, resource string) auth.TokenVerifier {
+	keys := oidc.NewRemoteKeySet(context.Background(), cfg.JWKSURL)
+	v := oidc.NewVerifier(cfg.Issuer, keys, &oidc.Config{SkipClientIDCheck: true})
+	return func(ctx context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
+		tok, err := v.Verify(ctx, token)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", auth.ErrInvalidToken, err)
+		}
+		if !contains(tok.Audience, resource) {
+			return nil, fmt.Errorf("%w: audience %v does not include %s", auth.ErrInvalidToken, tok.Audience, resource)
+		}
+		var claims struct {
+			Scope string `json:"scope"`
+			AZP   string `json:"azp"`
+		}
+		if err := tok.Claims(&claims); err != nil {
+			return nil, fmt.Errorf("%w: %v", auth.ErrInvalidToken, err)
+		}
+		return &auth.TokenInfo{
+			Scopes:     strings.Fields(claims.Scope),
+			Expiration: tok.Expiry,
+			UserID:     tok.Subject,
+			Extra:      map[string]any{"azp": claims.AZP},
+		}, nil
+	}
+}
+
+func requireAPIKey(key string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Api-Key")), []byte(key)) != 1 {
+			http.Error(w, "missing or invalid X-Api-Key", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func logRequests(log *slog.Logger, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		start := time.Now()
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(sw, r)
+		attrs := []any{"method", r.Method, "path", r.URL.Path, "status", sw.status,
+			"ms", time.Since(start).Milliseconds(), "mcpProtocol", r.Header.Get("Mcp-Protocol-Version")}
+		if ti := auth.TokenInfoFromContext(r.Context()); ti != nil {
+			attrs = append(attrs, "sub", ti.UserID, "azp", ti.Extra["azp"])
+		}
+		log.Info("request", attrs...)
+	})
+}
+
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (s *statusWriter) WriteHeader(code int) { s.status = code; s.ResponseWriter.WriteHeader(code) }
+
+// Flush keeps SSE streaming working through the logging wrapper.
+func (s *statusWriter) Flush() {
+	if f, ok := s.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (s *statusWriter) Unwrap() http.ResponseWriter { return s.ResponseWriter }
+
+func contains(xs []string, x string) bool {
+	for _, v := range xs {
+		if v == x {
+			return true
+		}
+	}
+	return false
+}
+
+// ErrResult turns a validation problem into a tool error the model can read.
+func ErrResult(format string, args ...any) *mcp.CallToolResult {
+	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf(format, args...)}}}
+}
+
+// Text wraps a plain string result.
+func Text(s string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: s}}}
+}
