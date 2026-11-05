@@ -37,23 +37,33 @@ type Spec struct {
 //	OAUTH_JWKS_URL  JWKS endpoint (default: <issuer>/protocol/openid-connect/certs)
 //	OAUTH_SCOPE     scope the token must carry (also advertised in PRM)
 //	API_KEY         when set, requests must also send a matching X-Api-Key
+//	BASIC_USER      with BASIC_PASSWORD, requests must send HTTP Basic credentials
+//	BASIC_PASSWORD  password for BASIC_USER
+//	BEARER_TOKEN    when set, requests must send Authorization: Bearer <this token>
+//	                (a static token; mutually exclusive with OAUTH_ISSUER)
 type Config struct {
-	Port      string
-	PublicURL string
-	Issuer    string
-	JWKSURL   string
-	Scope     string
-	APIKey    string
+	Port          string
+	PublicURL     string
+	Issuer        string
+	JWKSURL       string
+	Scope         string
+	APIKey        string
+	BasicUser     string
+	BasicPassword string
+	BearerToken   string
 }
 
 func configFromEnv() Config {
 	c := Config{
-		Port:      getenv("PORT", "8080"),
-		PublicURL: strings.TrimRight(os.Getenv("PUBLIC_URL"), "/"),
-		Issuer:    os.Getenv("OAUTH_ISSUER"),
-		JWKSURL:   os.Getenv("OAUTH_JWKS_URL"),
-		Scope:     os.Getenv("OAUTH_SCOPE"),
-		APIKey:    os.Getenv("API_KEY"),
+		Port:          getenv("PORT", "8080"),
+		PublicURL:     strings.TrimRight(os.Getenv("PUBLIC_URL"), "/"),
+		Issuer:        os.Getenv("OAUTH_ISSUER"),
+		JWKSURL:       os.Getenv("OAUTH_JWKS_URL"),
+		Scope:         os.Getenv("OAUTH_SCOPE"),
+		APIKey:        os.Getenv("API_KEY"),
+		BasicUser:     os.Getenv("BASIC_USER"),
+		BasicPassword: os.Getenv("BASIC_PASSWORD"),
+		BearerToken:   os.Getenv("BEARER_TOKEN"),
 	}
 	if c.Issuer != "" && c.JWKSURL == "" {
 		c.JWKSURL = strings.TrimRight(c.Issuer, "/") + "/protocol/openid-connect/certs"
@@ -75,6 +85,14 @@ func getenv(k, def string) string {
 func Run(spec Spec) {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil)).With("server", spec.Name)
 	cfg := configFromEnv()
+	if cfg.Issuer != "" && cfg.BearerToken != "" {
+		log.Error("OAUTH_ISSUER and BEARER_TOKEN are mutually exclusive")
+		os.Exit(2)
+	}
+	if (cfg.BasicUser == "") != (cfg.BasicPassword == "") {
+		log.Error("BASIC_USER and BASIC_PASSWORD must be set together")
+		os.Exit(2)
+	}
 
 	server := mcp.NewServer(&mcp.Implementation{Name: spec.Name, Version: spec.Version}, &mcp.ServerOptions{
 		SupportedProtocolVersions: []string{spec.ProtocolVersion},
@@ -92,6 +110,12 @@ func Run(spec Spec) {
 	resource := cfg.PublicURL + "/mcp"
 	if cfg.APIKey != "" {
 		handler = requireAPIKey(cfg.APIKey, handler)
+	}
+	if cfg.BasicUser != "" {
+		handler = requireBasicAuth(cfg.BasicUser, cfg.BasicPassword, spec.Name, handler)
+	}
+	if cfg.BearerToken != "" {
+		handler = requireStaticBearer(cfg.BearerToken, handler)
 	}
 	if cfg.Issuer != "" {
 		prmURL := cfg.PublicURL + "/.well-known/oauth-protected-resource/mcp"
@@ -119,7 +143,8 @@ func Run(spec Spec) {
 	mux.Handle("/mcp", handler)
 
 	log.Info("listening", "port", cfg.Port, "protocol", spec.ProtocolVersion, "resource", resource,
-		"oauth", cfg.Issuer != "", "scope", cfg.Scope, "apiKey", cfg.APIKey != "", "jsonResponse", spec.JSONResponse)
+		"oauth", cfg.Issuer != "", "scope", cfg.Scope, "apiKey", cfg.APIKey != "",
+		"basicAuth", cfg.BasicUser != "", "staticBearer", cfg.BearerToken != "", "jsonResponse", spec.JSONResponse)
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: logRequests(log, mux), ReadHeaderTimeout: 10 * time.Second}
 	if err := srv.ListenAndServe(); err != nil {
 		log.Error("server stopped", "err", err)
@@ -160,6 +185,34 @@ func requireAPIKey(key string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Api-Key")), []byte(key)) != 1 {
 			http.Error(w, "missing or invalid X-Api-Key", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// requireBasicAuth enforces RFC 7617 HTTP Basic credentials.
+func requireBasicAuth(user, pass, realm string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		u, p, ok := r.BasicAuth()
+		if !ok || subtle.ConstantTimeCompare([]byte(u), []byte(user)) != 1 ||
+			subtle.ConstantTimeCompare([]byte(p), []byte(pass)) != 1 {
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Basic realm=%q, charset="UTF-8"`, realm))
+			http.Error(w, "missing or invalid Basic credentials", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// requireStaticBearer enforces a fixed Authorization: Bearer token (no OAuth,
+// no JWT): the shape of an API that hands out long-lived tokens.
+func requireStaticBearer(token string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if !ok || subtle.ConstantTimeCompare([]byte(strings.TrimSpace(got)), []byte(token)) != 1 {
+			w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
+			http.Error(w, "missing or invalid bearer token", http.StatusUnauthorized)
 			return
 		}
 		next.ServeHTTP(w, r)

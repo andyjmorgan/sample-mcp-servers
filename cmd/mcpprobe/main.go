@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -36,6 +37,7 @@ func main() {
 	args := flag.String("args", "{}", "tool arguments as JSON")
 	token := flag.String("token", "", "bearer token")
 	apiKey := flag.String("api-key", "", "X-Api-Key value")
+	basic := flag.String("basic", "", "HTTP Basic credentials as user:password")
 	progress := flag.Bool("progress", false, "send a progress token and print progress events")
 	flag.Parse()
 
@@ -45,6 +47,9 @@ func main() {
 	}
 	if *apiKey != "" {
 		headers["X-Api-Key"] = *apiKey
+	}
+	if *basic != "" {
+		headers["Authorization"] = "Basic " + base64.StdEncoding.EncodeToString([]byte(*basic))
 	}
 	client := mcp.NewClient(&mcp.Implementation{Name: "mcpprobe", Version: "1.0.0"}, &mcp.ClientOptions{
 		ProgressNotificationHandler: func(_ context.Context, r *mcp.ProgressNotificationClientRequest) {
