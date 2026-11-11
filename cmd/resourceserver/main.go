@@ -33,6 +33,49 @@ can be read two ways:
 - **read_resource** (a tool) with the same URI, for clients that only call tools.
 
 Both return the same bytes and the same MIME type.
+
+## Why two surfaces
+
+MCP clients are uneven. Some implement the resources capability and show
+resources in their own UI. Others only know how to call tools. A gateway in
+front of this server has to cope with both, so the server exposes the same
+catalogue through both doors:
+
+| Surface | List | Read |
+|---|---|---|
+| Resources | ` + "`resources/list`" + ` and ` + "`resources/templates/list`" + ` | ` + "`resources/read`" + ` |
+| Tools | ` + "`list_resources`" + ` | ` + "`read_resource`" + ` |
+
+The tool results carry the document in ` + "`structuredContent`" + ` and again as a
+JSON text block, so a text-only client sees the same data as a structured one.
+
+## What a gateway should do with this
+
+A gateway that merges several servers behind one front door has to answer
+three questions for every resource request:
+
+1. Which server owns the URI? This server owns everything under
+   ` + "`sample://docs/`" + ` and the ` + "`sample://greet/{name}`" + ` template. A merged
+   listing tags each entry with the owning server in ` + "`_meta`" + `.
+2. Is the content text or binary? Every document here is text. The MIME type
+   tells the client how to render it: markdown, plain text or JSON.
+3. Can the listing be cached? Yes. Nothing here changes while the process
+   runs, and the server does not send ` + "`listChanged`" + ` notifications.
+
+## Documents
+
+- ` + "`sample://docs/readme`" + ` this file
+- ` + "`sample://docs/getting-started`" + ` a walkthrough of the two surfaces
+- ` + "`sample://docs/faq`" + ` questions that come up when testing a gateway
+- ` + "`sample://docs/config`" + ` a small JSON document for the JSON rendering path
+- ` + "`sample://docs/license`" + ` a plain-text notice
+
+## Authentication
+
+The server validates a bearer token issued by the lab Keycloak realm and
+expects the ` + "`mcp:resources`" + ` audience. Without a token it answers 401 with a
+` + "`WWW-Authenticate`" + ` header that points at the protected resource metadata, so
+a client can discover the authorization server and register itself.
 `,
 	},
 	{
@@ -40,12 +83,64 @@ Both return the same bytes and the same MIME type.
 			Description: "A short walkthrough of listing and reading resources.", MIMEType: "text/markdown"},
 		text: `# Getting started
 
-1. List what is available: ` + "`resources/list`" + ` or the ` + "`list_resources`" + ` tool.
-2. Pick a URI, for example ` + "`sample://docs/faq`" + `.
-3. Read it: ` + "`resources/read`" + ` or ` + "`read_resource`" + ` with ` + "`uri`" + `.
+This walkthrough reads one document three ways so you can compare what each
+path returns. The content is identical; only the envelope differs.
 
-Templated resources (` + "`resources/templates/list`" + `) take a value in the URI:
-` + "`sample://greet/Ada`" + ` renders a greeting for Ada.
+## 1. List what is available
+
+Over the resources surface:
+
+` + "```" + `json
+{"jsonrpc":"2.0","id":1,"method":"resources/list","params":{}}
+` + "```" + `
+
+The result lists five documents, each with a URI, name, title, description and
+MIME type. Templates live in a separate call:
+
+` + "```" + `json
+{"jsonrpc":"2.0","id":2,"method":"resources/templates/list","params":{}}
+` + "```" + `
+
+Over the tools surface, call ` + "`list_resources`" + ` with no arguments. The result
+includes a ` + "`size`" + ` for each document in bytes.
+
+## 2. Pick a URI
+
+Static documents have fixed URIs, for example ` + "`sample://docs/faq`" + `.
+
+Templated resources take a value in the URI. The template
+` + "`sample://greet/{name}`" + ` expands to ` + "`sample://greet/Ada`" + `, which renders a
+greeting for Ada. Any name works; the server does not validate it beyond
+rejecting an empty one.
+
+## 3. Read it
+
+Over the resources surface:
+
+` + "```" + `json
+{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"sample://docs/faq"}}
+` + "```" + `
+
+The result has a ` + "`contents`" + ` array with one entry carrying ` + "`uri`" + `,
+` + "`mimeType`" + ` and ` + "`text`" + `.
+
+Over the tools surface, call ` + "`read_resource`" + ` with ` + "`{\"uri\": \"sample://docs/faq\"}`" + `.
+The tool returns the same three fields in ` + "`structuredContent`" + `.
+
+## 4. Read it through a gateway
+
+Behind a gateway the URI does not change. The gateway finds the owning server
+from its cached listings, forwards the read, and returns the upstream result
+unchanged. If the URI is not in any cached listing the gateway refreshes the
+listings once before giving up with a not-found error.
+
+## Things to try
+
+- Read ` + "`sample://docs/config`" + ` and check the MIME type is ` + "`application/json`" + `.
+- Read ` + "`sample://greet/Grace`" + ` and confirm the template resolved.
+- Read ` + "`sample://docs/missing`" + ` and confirm you get a resource-not-found error
+  rather than an empty result.
+- Read the same document over both surfaces and diff the text.
 `,
 	},
 	{
@@ -53,14 +148,59 @@ Templated resources (` + "`resources/templates/list`" + `) take a value in the U
 			Description: "Frequently asked questions about the fixture.", MIMEType: "text/markdown"},
 		text: `# FAQ
 
-**Do the resources change?** No. They are compiled into the binary.
+## Content
 
-**Is there a size limit?** Every document is under a few KB.
+**Do the resources change?** No. They are compiled into the binary. A rebuild
+is the only way to change them, which makes the server a stable fixture for
+cache tests.
 
-**Can I subscribe to updates?** No. Nothing ever changes, so there is nothing to subscribe to.
+**Is there a size limit?** Every document is under 8 KB. The config document
+advertises a ` + "`maxDocumentBytes`" + ` limit, but that value is itself fixture data,
+not something the server enforces.
 
-**Why are there tools as well?** Some MCP clients do not implement resources yet.
-The tools expose the same content so a gateway can be tested either way.
+**Can I subscribe to updates?** No. Nothing ever changes, so there is nothing
+to subscribe to. The server does not advertise the ` + "`subscribe`" + ` capability
+and will answer ` + "`resources/subscribe`" + ` with method not found.
+
+**What MIME types are used?** Markdown for the prose documents, plain text for
+the licence and the greeting, JSON for the config document. That covers the
+three rendering paths a client is likely to have.
+
+## Surfaces
+
+**Why are there tools as well?** Some MCP clients do not implement resources
+yet. The tools expose the same content so a gateway can be tested either way.
+
+**Do the tools return the same bytes?** Yes. ` + "`read_resource`" + ` calls the same
+lookup as ` + "`resources/read`" + ` and copies the text and MIME type into its result.
+
+**Are the tool results structured?** Yes. Both tools declare an output schema
+and return ` + "`structuredContent`" + `. The text block is the same JSON serialized,
+as the specification asks of tools that return structured content.
+
+## Gateway behaviour
+
+**How does a gateway know which server owns a URI?** From its cached
+listings. An exact match on a listed URI wins. Failing that, the longest
+template prefix (everything before the first ` + "`{`" + `) wins. Failing that, the
+gateway refreshes its listings and tries once more.
+
+**What happens on the merged route?** Listings from every server are
+concatenated and each entry is tagged with the owning server's slug in
+` + "`_meta`" + `. URIs are not rewritten, because a URI is the resource's identity.
+
+**What if two servers list the same URI?** The first server in slug order
+wins. This fixture only lists URIs under ` + "`sample://`" + `, so clashes with other
+servers are unlikely unless another fixture copies it.
+
+## Authentication
+
+**Which scope do I need?** ` + "`mcp:resources`" + `. Tokens without that audience are
+rejected with 401.
+
+**Can I use an API key instead?** Not on this server. The fetch and search
+servers accept an ` + "`X-Api-Key`" + ` header; this one is OAuth only so that the
+gateway's OAuth path gets exercised.
 `,
 	},
 	{
@@ -71,7 +211,7 @@ The tools expose the same content so a gateway can be tested either way.
   "protocolVersion": "2026-07-28",
   "stateless": true,
   "surfaces": ["resources", "tools"],
-  "limits": { "maxDocumentBytes": 4096, "templates": 1 }
+  "limits": { "maxDocumentBytes": 8192, "templates": 1 }
 }
 `,
 	},
@@ -82,6 +222,25 @@ The tools expose the same content so a gateway can be tested either way.
 
 This text is provided as-is, with no warranty, and may be copied freely.
 It exists only so that a gateway has a text/plain resource to pass through.
+
+Permission is granted to anyone obtaining a copy of this fixture and its
+associated documents to use, copy, modify, merge, publish and distribute
+them without restriction, provided that this notice is kept with any copy.
+
+The fixture is a test aid. It is not a product, it carries no support
+commitment, and nothing in it should be taken as advice. If it breaks,
+you keep both pieces.
+
+Third-party notices
+
+The server is built with the Model Context Protocol Go SDK and the Go
+standard library. Each is distributed under its own licence, which is
+not changed by this notice.
+
+Contact
+
+Questions about the fixture belong with the gateway it was written to
+test, not with the fixture itself.
 `,
 	},
 }
