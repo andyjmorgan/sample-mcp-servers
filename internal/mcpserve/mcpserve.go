@@ -271,3 +271,26 @@ func ErrResult(format string, args ...any) *mcp.CallToolResult {
 func Text(s string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: s}}}
 }
+
+// Tool builds a tool definition with a human title and all four behaviour
+// hints set explicitly. Every sample tool is a stateless, local computation,
+// so it is read-only, non-destructive and closed-world; idempotent is true for
+// deterministic tools and false for randomised ones. DestructiveHint and
+// OpenWorldHint are pointers because the spec defaults both to true. The title
+// is also copied into Annotations.Title for 2025-03-26 clients, which predate
+// Tool.title.
+func Tool(name, title, description string, idempotent bool) *mcp.Tool {
+	f := false
+	return &mcp.Tool{
+		Name:        name,
+		Title:       title,
+		Description: description,
+		Annotations: &mcp.ToolAnnotations{
+			Title:           title,
+			ReadOnlyHint:    true,
+			DestructiveHint: &f,
+			IdempotentHint:  idempotent,
+			OpenWorldHint:   &f,
+		},
+	}
+}

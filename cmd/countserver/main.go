@@ -24,7 +24,7 @@ func main() {
 		Version:         "1.0.0",
 		ProtocolVersion: "2026-07-28",
 		Register: func(s *mcp.Server) {
-			mcp.AddTool(s, &mcp.Tool{Name: "count", Description: "Count from 1 to n with a pause between steps, reporting progress when a progress token is supplied."},
+			mcp.AddTool(s, mcpserve.Tool("count", "Count to N", "Count from 1 to n with a pause between steps, reporting progress when a progress token is supplied.", true),
 				func(ctx context.Context, req *mcp.CallToolRequest, in countIn) (*mcp.CallToolResult, any, error) {
 					n, delay := in.N, 500
 					if n == 0 {

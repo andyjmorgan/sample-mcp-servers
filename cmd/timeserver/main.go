@@ -20,7 +20,7 @@ func main() {
 		Version:         "1.0.0",
 		ProtocolVersion: "2025-03-26",
 		Register: func(s *mcp.Server) {
-			mcp.AddTool(s, &mcp.Tool{Name: "now", Description: "Current time as 15:04:05 MST, in an optional IANA timezone."},
+			mcp.AddTool(s, mcpserve.Tool("now", "Current Time", "Current time as 15:04:05 MST, in an optional IANA timezone.", true),
 				func(_ context.Context, _ *mcp.CallToolRequest, in nowIn) (*mcp.CallToolResult, any, error) {
 					loc := time.UTC
 					if in.Timezone != "" {

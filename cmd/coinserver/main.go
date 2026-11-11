@@ -47,7 +47,7 @@ func main() {
 		Version:         "1.0.0",
 		ProtocolVersion: "2025-11-25",
 		Register: func(s *mcp.Server) {
-			mcp.AddTool(s, &mcp.Tool{Name: "flip", Description: "Flip 1-100 coins."},
+			mcp.AddTool(s, mcpserve.Tool("flip", "Flip Coins", "Flip 1-100 coins.", false),
 				func(_ context.Context, _ *mcp.CallToolRequest, in flipIn) (*mcp.CallToolResult, flipOut, error) {
 					n := in.Count
 					if n == 0 {
@@ -68,7 +68,7 @@ func main() {
 					}
 					return mcpserve.Text(fmt.Sprintf("%s (%d heads, %d tails)", strings.Join(out.Flips, ", "), out.Heads, out.Tails)), out, nil
 				})
-			mcp.AddTool(s, &mcp.Tool{Name: "pick", Description: "Pick one option at random from a list of 1-50."},
+			mcp.AddTool(s, mcpserve.Tool("pick", "Pick One", "Pick one option at random from a list of 1-50.", false),
 				func(_ context.Context, _ *mcp.CallToolRequest, in pickIn) (*mcp.CallToolResult, pickOut, error) {
 					if len(in.Options) < 1 || len(in.Options) > 50 {
 						return mcpserve.ErrResult("options must have 1-50 entries, got %d", len(in.Options)), pickOut{}, nil
@@ -77,7 +77,7 @@ func main() {
 					out := pickOut{Choice: in.Options[i], Index: i}
 					return mcpserve.Text(out.Choice), out, nil
 				})
-			mcp.AddTool(s, &mcp.Tool{Name: "random_int", Description: "A uniformly random integer in [min, max] (defaults 0-100)."},
+			mcp.AddTool(s, mcpserve.Tool("random_int", "Random Integer", "A uniformly random integer in [min, max] (defaults 0-100).", false),
 				func(_ context.Context, _ *mcp.CallToolRequest, in randomIntIn) (*mcp.CallToolResult, randomIntOut, error) {
 					lo, hi := in.Min, in.Max
 					if lo == 0 && hi == 0 {

@@ -45,7 +45,7 @@ func main() {
 		Version:         "1.0.0",
 		ProtocolVersion: "2025-03-26",
 		Register: func(s *mcp.Server) {
-			mcp.AddTool(s, &mcp.Tool{Name: "random_word", Description: "Return 1-20 random English words."},
+			mcp.AddTool(s, mcpserve.Tool("random_word", "Random Words", "Return 1-20 random English words.", false),
 				func(_ context.Context, _ *mcp.CallToolRequest, in randomWordIn) (*mcp.CallToolResult, randomWordOut, error) {
 					n := in.Count
 					if n == 0 {
@@ -60,7 +60,7 @@ func main() {
 					}
 					return mcpserve.Text(strings.Join(out.Words, " ")), out, nil
 				})
-			mcp.AddTool(s, &mcp.Tool{Name: "reverse", Description: "Reverse a string (rune-aware)."},
+			mcp.AddTool(s, mcpserve.Tool("reverse", "Reverse Text", "Reverse a string (rune-aware).", true),
 				func(_ context.Context, _ *mcp.CallToolRequest, in textIn) (*mcp.CallToolResult, reverseOut, error) {
 					r := []rune(in.Text)
 					for i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {
@@ -69,7 +69,7 @@ func main() {
 					out := reverseOut{Reversed: string(r)}
 					return mcpserve.Text(out.Reversed), out, nil
 				})
-			mcp.AddTool(s, &mcp.Tool{Name: "word_count", Description: "Count the words and characters in a string."},
+			mcp.AddTool(s, mcpserve.Tool("word_count", "Word Count", "Count the words and characters in a string.", true),
 				func(_ context.Context, _ *mcp.CallToolRequest, in textIn) (*mcp.CallToolResult, wordCountOut, error) {
 					out := wordCountOut{Words: len(strings.Fields(in.Text)), Characters: len([]rune(in.Text))}
 					return mcpserve.Text(fmt.Sprintf("%d words, %d characters", out.Words, out.Characters)), out, nil

@@ -21,7 +21,7 @@ func main() {
 		ProtocolVersion: "2025-06-18",
 		JSONResponse:    true,
 		Register: func(s *mcp.Server) {
-			mcp.AddTool(s, &mcp.Tool{Name: "today", Description: "Today's date as 2006-01-02 (Monday), in an optional IANA timezone."},
+			mcp.AddTool(s, mcpserve.Tool("today", "Today's Date", "Today's date as 2006-01-02 (Monday), in an optional IANA timezone.", true),
 				func(_ context.Context, _ *mcp.CallToolRequest, in todayIn) (*mcp.CallToolResult, any, error) {
 					loc := time.UTC
 					if in.Timezone != "" {

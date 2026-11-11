@@ -32,18 +32,18 @@ func main() {
 		ProtocolVersion: "2025-06-18",
 		JSONResponse:    true,
 		Register: func(s *mcp.Server) {
-			mcp.AddTool(s, &mcp.Tool{Name: "sha256", Description: "SHA-256 digest of the text, hex encoded."},
+			mcp.AddTool(s, mcpserve.Tool("sha256", "SHA-256 Hash", "SHA-256 digest of the text, hex encoded.", true),
 				func(_ context.Context, _ *mcp.CallToolRequest, in textIn) (*mcp.CallToolResult, sha256Out, error) {
 					sum := sha256.Sum256([]byte(in.Text))
 					out := sha256Out{Hex: hex.EncodeToString(sum[:])}
 					return mcpserve.Text(out.Hex), out, nil
 				})
-			mcp.AddTool(s, &mcp.Tool{Name: "base64_encode", Description: "Base64 (standard, padded) encode the text."},
+			mcp.AddTool(s, mcpserve.Tool("base64_encode", "Base64 Encode", "Base64 (standard, padded) encode the text.", true),
 				func(_ context.Context, _ *mcp.CallToolRequest, in textIn) (*mcp.CallToolResult, base64Out, error) {
 					out := base64Out{Result: base64.StdEncoding.EncodeToString([]byte(in.Text))}
 					return mcpserve.Text(out.Result), out, nil
 				})
-			mcp.AddTool(s, &mcp.Tool{Name: "base64_decode", Description: "Decode standard base64 text back to UTF-8."},
+			mcp.AddTool(s, mcpserve.Tool("base64_decode", "Base64 Decode", "Decode standard base64 text back to UTF-8.", true),
 				func(_ context.Context, _ *mcp.CallToolRequest, in textIn) (*mcp.CallToolResult, base64Out, error) {
 					b, err := base64.StdEncoding.DecodeString(in.Text)
 					if err != nil {

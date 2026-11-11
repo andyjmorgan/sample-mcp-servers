@@ -25,7 +25,7 @@ func main() {
 		Version:         "1.0.0",
 		ProtocolVersion: "2024-11-05",
 		Register: func(s *mcp.Server) {
-			mcp.AddTool(s, &mcp.Tool{Name: "generate", Description: "Generate 1-20 random (v4) UUIDs."},
+			mcp.AddTool(s, mcpserve.Tool("generate", "Generate UUIDs", "Generate 1-20 random (v4) UUIDs.", false),
 				func(_ context.Context, _ *mcp.CallToolRequest, in generateIn) (*mcp.CallToolResult, generateOut, error) {
 					n := in.Count
 					if n == 0 {

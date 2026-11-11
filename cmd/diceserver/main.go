@@ -28,7 +28,7 @@ func main() {
 		Version:         "1.0.0",
 		ProtocolVersion: "2026-07-28",
 		Register: func(s *mcp.Server) {
-			mcp.AddTool(s, &mcp.Tool{Name: "roll", Description: "Roll count dice with the given number of sides (count 1-100, sides 2-1000)."},
+			mcp.AddTool(s, mcpserve.Tool("roll", "Roll Dice", "Roll count dice with the given number of sides (count 1-100, sides 2-1000).", false),
 				func(_ context.Context, _ *mcp.CallToolRequest, in rollIn) (*mcp.CallToolResult, rollOut, error) {
 					count, sides := in.Count, in.Sides
 					if count == 0 {
