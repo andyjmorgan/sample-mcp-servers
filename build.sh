@@ -5,7 +5,7 @@
 set -euo pipefail
 REGISTRY=${REGISTRY:-192.168.0.140:5555/sample-mcp-servers}
 TAG=${TAG:-$(git rev-parse --short HEAD)}
-for s in timeserver dateserver uuidserver diceserver countserver wordserver hashserver coinserver; do
+for s in timeserver dateserver uuidserver diceserver countserver wordserver hashserver coinserver promptserver resourceserver; do
   docker build --build-arg SERVER=$s -t "$REGISTRY/$s:$TAG" -t "$REGISTRY/$s:latest" .
   docker push -q "$REGISTRY/$s:$TAG"
   docker push -q "$REGISTRY/$s:latest"

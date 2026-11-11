@@ -1,6 +1,6 @@
 # sample-mcp-servers
 
-Eight tiny MCP servers for testing an MCP gateway. Each one speaks exactly one protocol version and runs stateless (`Stateless: true`, so only the gateway deals with `Mcp-Session-Id`). The first five sit behind Keycloak OAuth, where MCP clients register through OAuth Client ID Metadata Documents (CIMD). The last three model the non-OAuth auth schemes a gateway has to inject on a client's behalf: HTTP Basic, `X-Api-Key`, and a static `Authorization: Bearer` token.
+Ten tiny MCP servers for testing an MCP gateway. Each one speaks exactly one protocol version and runs stateless (`Stateless: true`, so only the gateway deals with `Mcp-Session-Id`). Seven sit behind Keycloak OAuth, where MCP clients register through OAuth Client ID Metadata Documents (CIMD). The other three model the non-OAuth auth schemes a gateway has to inject on a client's behalf: HTTP Basic, `X-Api-Key`, and a static `Authorization: Bearer` token.
 
 | Server | Tool | Protocol | Transport | Extra auth | Public endpoint |
 |---|---|---|---|---|---|
@@ -12,18 +12,20 @@ Eight tiny MCP servers for testing an MCP gateway. Each one speaks exactly one p
 | wordserver | `random_word` (1–20 words), `reverse` (`text`), `word_count` (`text`) | 2025-03-26 | SSE | HTTP Basic only | `https://mcp-word.donkeywork.dev/mcp` |
 | hashserver | `sha256`, `base64_encode`, `base64_decode` (all take `text`) | 2025-06-18 | plain JSON | `X-Api-Key` only | `https://mcp-hash.donkeywork.dev/mcp` |
 | coinserver | `flip` (`count` 1–100), `pick` (`options` 1–50), `random_int` (`min`,`max`) | 2025-11-25 | SSE | static Bearer only | `https://mcp-coin.donkeywork.dev/mcp` |
+| promptserver | MCP prompts `summarize`, `translate`, `code_review`, `daily_standup`; same content via tools `list_prompts`, `get_prompt` (`name`, `arguments`) | 2026-07-28 | SSE | — | `https://mcp-prompts.donkeywork.dev/mcp` |
+| resourceserver | MCP resources `sample://docs/{readme,getting-started,faq,config,license}` + template `sample://greet/{name}`; same content via tools `list_resources`, `read_resource` (`uri`) | 2026-07-28 | SSE | — | `https://mcp-resources.donkeywork.dev/mcp` |
 
 A server pinned to 2026-07-28 answers a legacy `initialize` with `2025-11-25`, and the client is expected to disconnect. That's the go-sdk behaviour, and it's the case a translating gateway has to handle.
 
 ## Auth
 
-### OAuth / CIMD (time, date, uuid, dice, count)
+### OAuth / CIMD (time, date, uuid, dice, count, prompts, resources)
 
 Every request to `/mcp` needs `Authorization: Bearer <Keycloak access token>`. The token must:
 
 - be signed by the `Agents` realm (`https://auth.donkeywork.dev/realms/Agents`)
 - have the server's endpoint URL in `aud`
-- carry the server's scope (`mcp:time`, `mcp:date`, `mcp:uuid`, `mcp:dice`, `mcp:count`)
+- carry the server's scope (`mcp:time`, `mcp:date`, `mcp:uuid`, `mcp:dice`, `mcp:count`, `mcp:prompts`, `mcp:resources`)
 
 An unauthenticated request gets `401` with `WWW-Authenticate: Bearer resource_metadata="…", scope="…"`. The Protected Resource Metadata at `/.well-known/oauth-protected-resource/mcp` points clients at Keycloak. There, a CIMD client (Claude Code, Claude Desktop, VS Code) requests the scope. An audience mapper on that client scope then puts the endpoint URL into `aud`.
 

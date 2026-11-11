@@ -101,16 +101,7 @@ func Run(spec Spec) {
 		os.Exit(2)
 	}
 
-	server := mcp.NewServer(&mcp.Implementation{Name: spec.Name, Version: spec.Version}, &mcp.ServerOptions{
-		Instructions:              spec.Instructions,
-		SupportedProtocolVersions: []string{spec.ProtocolVersion},
-	})
-	spec.Register(server)
-
-	var handler http.Handler = mcp.NewStreamableHTTPHandler(
-		func(*http.Request) *mcp.Server { return server },
-		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: spec.JSONResponse},
-	)
+	handler := NewHandler(spec)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
@@ -176,6 +167,21 @@ func Run(spec Spec) {
 		srv.Close()
 	}
 	log.Info("stopped")
+}
+
+// NewHandler builds the server described by spec and returns its stateless
+// Streamable HTTP handler, without any auth layers. Run mounts it at /mcp;
+// tests serve it from httptest.
+func NewHandler(spec Spec) http.Handler {
+	server := mcp.NewServer(&mcp.Implementation{Name: spec.Name, Version: spec.Version}, &mcp.ServerOptions{
+		Instructions:              spec.Instructions,
+		SupportedProtocolVersions: []string{spec.ProtocolVersion},
+	})
+	spec.Register(server)
+	return mcp.NewStreamableHTTPHandler(
+		func(*http.Request) *mcp.Server { return server },
+		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: spec.JSONResponse},
+	)
 }
 
 // shutdownTimeout bounds the drain on SIGTERM; well inside the default 30s
