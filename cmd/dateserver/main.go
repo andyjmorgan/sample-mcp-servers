@@ -19,6 +19,7 @@ func main() {
 		Name:            "dateserver",
 		Version:         "1.0.0",
 		ProtocolVersion: "2025-06-18",
+		Instructions:    "Tells today's date. Call today with an IANA timezone when the user's locale matters, because the day differs across the date line. For the time of day use the time server.",
 		JSONResponse:    true,
 		Register: func(s *mcp.Server) {
 			mcp.AddTool(s, mcpserve.Tool("today", "Today's Date", "Today's date as 2006-01-02 (Monday), in an optional IANA timezone.", true),

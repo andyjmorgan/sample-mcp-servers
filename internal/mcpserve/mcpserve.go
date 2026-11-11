@@ -29,7 +29,10 @@ type Spec struct {
 	Version         string
 	ProtocolVersion string // the only version the server advertises
 	JSONResponse    bool   // reply with application/json instead of SSE
-	Register        func(*mcp.Server)
+	// Instructions is sent in the initialize result: how a model should use
+	// this server, written for the model rather than for a human.
+	Instructions string
+	Register     func(*mcp.Server)
 }
 
 // Config is read from the environment.
@@ -99,6 +102,7 @@ func Run(spec Spec) {
 	}
 
 	server := mcp.NewServer(&mcp.Implementation{Name: spec.Name, Version: spec.Version}, &mcp.ServerOptions{
+		Instructions:              spec.Instructions,
 		SupportedProtocolVersions: []string{spec.ProtocolVersion},
 	})
 	spec.Register(server)

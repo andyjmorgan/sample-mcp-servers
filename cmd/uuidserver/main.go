@@ -24,6 +24,7 @@ func main() {
 		Name:            "uuidserver",
 		Version:         "1.0.0",
 		ProtocolVersion: "2024-11-05",
+		Instructions:    "Generates random version 4 UUIDs. Ask for the exact count you need (1 to 20) in one call rather than calling repeatedly; every call returns fresh values.",
 		Register: func(s *mcp.Server) {
 			mcp.AddTool(s, mcpserve.Tool("generate", "Generate UUIDs", "Generate 1-20 random (v4) UUIDs.", false),
 				func(_ context.Context, _ *mcp.CallToolRequest, in generateIn) (*mcp.CallToolResult, generateOut, error) {

@@ -27,6 +27,7 @@ func main() {
 		Name:            "diceserver",
 		Version:         "1.0.0",
 		ProtocolVersion: "2026-07-28",
+		Instructions:    "Rolls dice. Give count and sides (for example 2d6 is count 2, sides 6). Results are random and not reproducible, so roll once and report what came back.",
 		Register: func(s *mcp.Server) {
 			mcp.AddTool(s, mcpserve.Tool("roll", "Roll Dice", "Roll count dice with the given number of sides (count 1-100, sides 2-1000).", false),
 				func(_ context.Context, _ *mcp.CallToolRequest, in rollIn) (*mcp.CallToolResult, rollOut, error) {

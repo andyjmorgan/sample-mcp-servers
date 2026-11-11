@@ -23,6 +23,7 @@ func main() {
 		Name:            "countserver",
 		Version:         "1.0.0",
 		ProtocolVersion: "2026-07-28",
+		Instructions:    "Counts from 1 to n slowly, reporting progress along the way. It exists to exercise progress notifications and long-running calls; keep n small (under 20) unless the user is testing progress.",
 		Register: func(s *mcp.Server) {
 			mcp.AddTool(s, mcpserve.Tool("count", "Count to N", "Count from 1 to n with a pause between steps, reporting progress when a progress token is supplied.", true),
 				func(ctx context.Context, req *mcp.CallToolRequest, in countIn) (*mcp.CallToolResult, any, error) {

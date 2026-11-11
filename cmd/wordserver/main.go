@@ -44,6 +44,7 @@ func main() {
 		Name:            "wordserver",
 		Version:         "1.0.0",
 		ProtocolVersion: "2025-03-26",
+		Instructions:    "Small text utilities: random English words, reversing a string, and counting words and characters. reverse and word_count are deterministic; random_word is not.",
 		Register: func(s *mcp.Server) {
 			mcp.AddTool(s, mcpserve.Tool("random_word", "Random Words", "Return 1-20 random English words.", false),
 				func(_ context.Context, _ *mcp.CallToolRequest, in randomWordIn) (*mcp.CallToolResult, randomWordOut, error) {

@@ -30,6 +30,7 @@ func main() {
 		Name:            "hashserver",
 		Version:         "1.0.0",
 		ProtocolVersion: "2025-06-18",
+		Instructions:    "Hashes and encodes text: sha256 returns a hex digest, base64_encode and base64_decode convert standard padded base64. All results are deterministic, so do not call twice for the same input.",
 		JSONResponse:    true,
 		Register: func(s *mcp.Server) {
 			mcp.AddTool(s, mcpserve.Tool("sha256", "SHA-256 Hash", "SHA-256 digest of the text, hex encoded.", true),

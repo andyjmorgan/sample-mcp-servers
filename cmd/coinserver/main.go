@@ -46,6 +46,7 @@ func main() {
 		Name:            "coinserver",
 		Version:         "1.0.0",
 		ProtocolVersion: "2025-11-25",
+		Instructions:    "Random choices: flip coins, pick one option from a list, or draw a random integer in a range. Results are random; call once and report the outcome rather than retrying for a better one.",
 		Register: func(s *mcp.Server) {
 			mcp.AddTool(s, mcpserve.Tool("flip", "Flip Coins", "Flip 1-100 coins.", false),
 				func(_ context.Context, _ *mcp.CallToolRequest, in flipIn) (*mcp.CallToolResult, flipOut, error) {

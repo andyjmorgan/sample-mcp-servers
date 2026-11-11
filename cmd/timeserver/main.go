@@ -19,6 +19,7 @@ func main() {
 		Name:            "timeserver",
 		Version:         "1.0.0",
 		ProtocolVersion: "2025-03-26",
+		Instructions:    "Tells the current wall-clock time. Call now with an IANA timezone (for example Europe/Dublin) when the user has one; without it you get UTC. Do not use it for dates, that is the date server.",
 		Register: func(s *mcp.Server) {
 			mcp.AddTool(s, mcpserve.Tool("now", "Current Time", "Current time as 15:04:05 MST, in an optional IANA timezone.", true),
 				func(_ context.Context, _ *mcp.CallToolRequest, in nowIn) (*mcp.CallToolResult, any, error) {
