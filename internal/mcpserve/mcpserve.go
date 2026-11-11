@@ -6,11 +6,14 @@ package mcpserve
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 	_ "time/tzdata" // IANA zones without relying on the base image
 
@@ -81,7 +84,8 @@ func getenv(k, def string) string {
 	return def
 }
 
-// Run serves the MCP endpoint at /mcp until the process exits.
+// Run serves the MCP endpoint at /mcp until SIGTERM or SIGINT, then drains
+// in-flight requests for up to shutdownTimeout and returns (exit 0).
 func Run(spec Spec) {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil)).With("server", spec.Name)
 	cfg := configFromEnv()
@@ -146,11 +150,33 @@ func Run(spec Spec) {
 		"oauth", cfg.Issuer != "", "scope", cfg.Scope, "apiKey", cfg.APIKey != "",
 		"basicAuth", cfg.BasicUser != "", "staticBearer", cfg.BearerToken != "", "jsonResponse", spec.JSONResponse)
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: logRequests(log, mux), ReadHeaderTimeout: 10 * time.Second}
-	if err := srv.ListenAndServe(); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+	defer stop()
+	errc := make(chan error, 1)
+	go func() { errc <- srv.ListenAndServe() }()
+	select {
+	case err := <-errc:
 		log.Error("server stopped", "err", err)
 		os.Exit(1)
+	case <-ctx.Done():
 	}
+	stop() // a second signal kills the process immediately
+	log.Info("shutting down")
+	sctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	if err := srv.Shutdown(sctx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+		log.Error("shutdown", "err", err)
+		os.Exit(1)
+	} else if err != nil {
+		log.Warn("shutdown timed out; closing open connections", "err", err)
+		srv.Close()
+	}
+	log.Info("stopped")
 }
+
+// shutdownTimeout bounds the drain on SIGTERM; well inside the default 30s
+// terminationGracePeriodSeconds. Long-lived SSE streams are cut when it expires.
+const shutdownTimeout = 5 * time.Second
 
 // newVerifier validates Keycloak access tokens: signature via JWKS, issuer,
 // expiry, and an audience that names this server's resource URL.
