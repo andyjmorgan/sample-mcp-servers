@@ -11,7 +11,7 @@ Ten tiny MCP servers for testing an MCP gateway. Each one speaks exactly one pro
 | countserver | `count` — 1..`n` with `delay_ms` pauses, `notifications/progress` when a progress token is sent | 2026-07-28 | SSE | — | `https://mcp-count.donkeywork.dev/mcp` |
 | wordserver | `random_word` (1–20 words), `reverse` (`text`), `word_count` (`text`) | 2025-03-26 | SSE | HTTP Basic only | `https://mcp-word.donkeywork.dev/mcp` |
 | hashserver | `sha256`, `base64_encode`, `base64_decode` (all take `text`) | 2025-06-18 | plain JSON | `X-Api-Key` only | `https://mcp-hash.donkeywork.dev/mcp` |
-| coinserver | `flip` (`count` 1–100), `pick` (`options` 1–50), `random_int` (`min`,`max`) | 2025-11-25 | SSE | static Bearer only | `https://mcp-coin.donkeywork.dev/mcp` |
+| coinserver | `flip` (`count` 1–100), `pick` (`options` 1–50), `random_int` (`min`,`max`) | 2026-07-28 | SSE | static Bearer only | `https://mcp-coin.donkeywork.dev/mcp` |
 | promptserver | MCP prompts `summarize`, `translate`, `code_review`, `daily_standup`; same content via tools `list_prompts`, `get_prompt` (`name`, `arguments`) | 2026-07-28 | SSE | — | `https://mcp-prompts.donkeywork.dev/mcp` |
 | resourceserver | MCP resources `sample://docs/{readme,getting-started,faq,config,license}` + template `sample://greet/{name}`; same content via tools `list_resources`, `read_resource` (`uri`) | 2026-07-28 | SSE | — | `https://mcp-resources.donkeywork.dev/mcp` |
 
