@@ -1,4 +1,4 @@
-// coinserver speaks MCP 2025-11-25 and is protected by a static
+// coinserver speaks only MCP 2026-07-28 (stateless, SSE responses) and is protected by a static
 // Authorization: Bearer token (set BEARER_TOKEN; no OAuth). Tools: flip, pick,
 // random_int.
 package main
@@ -45,7 +45,7 @@ func main() {
 	mcpserve.Run(mcpserve.Spec{
 		Name:            "coinserver",
 		Version:         "1.0.0",
-		ProtocolVersion: "2025-11-25",
+		ProtocolVersion: "2026-07-28",
 		Instructions:    "Random choices: flip coins, pick one option from a list, or draw a random integer in a range. Results are random; call once and report the outcome rather than retrying for a better one.",
 		Register: func(s *mcp.Server) {
 			mcp.AddTool(s, mcpserve.Tool("flip", "Flip Coins", "Flip 1-100 coins.", false),
