@@ -78,7 +78,22 @@ public class ElicitationServerTests
         Assert.DoesNotContain("address", user.Forms[0].RequestedSchema!.Required ?? []);
         Assert.Equal(["address"], user.Forms[1].RequestedSchema!.Properties.Keys);
         Assert.Equal(["address"], user.Forms[1].RequestedSchema!.Required);
-        Assert.Contains("delivered to 9 Elm Rd", Text(r));
+        // Every field from the first round survives the second.
+        Assert.Contains("1 pizza, small, thin crust, olives, delivered to 9 Elm Rd, for Lin", Text(r));
+        Assert.Contains("$13.50", Text(r));
+    }
+
+    [Fact]
+    public async Task NoToppingsSelectedMeansCheese()
+    {
+        var user = new ScriptedUser(_ => Accept(new { crust = "classic" }));
+        await using var h = await Harness.StartAsync(PizzaShop.Spec, user.Handlers);
+        var r = await h.Client.CallToolAsync("order_pizza", Args(new
+        {
+            size = "small", quantity = 1, name = "Al", fulfillment = "pickup",
+        }));
+        Assert.Contains("toppings", Assert.Single(user.Forms).RequestedSchema!.Properties.Keys);
+        Assert.Contains("classic crust, cheese", Text(r));
     }
 
     [Fact]

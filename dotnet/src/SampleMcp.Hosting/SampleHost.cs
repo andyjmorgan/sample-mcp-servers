@@ -64,6 +64,9 @@ public static class SampleHost
         builder.Logging.ClearProviders();
         builder.Logging.AddJsonConsole();
         builder.Logging.SetMinimumLevel(LogLevel.Warning);
+        // JwtBearer pulls in DataProtection, which warns about ephemeral keys at startup. Nothing
+        // here protects data with it, so the warning is noise.
+        builder.Logging.AddFilter("Microsoft.AspNetCore.DataProtection", LogLevel.Error);
 
         var mcp = builder.Services.AddMcpServer(o =>
         {

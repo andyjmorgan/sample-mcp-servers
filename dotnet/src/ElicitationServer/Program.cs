@@ -199,12 +199,9 @@ namespace ElicitationServer
             List<string>? List(string k) => content.TryGetValue(k, out var v) && v.ValueKind == JsonValueKind.Array
                 ? v.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString()!).ToList()
                 : null;
-            var toppings = List("toppings");
-            // An accepted form that asked for toppings and got none back means "no toppings".
-            if (toppings is null && content.Count > 0) toppings = [];
             return new Order
             {
-                Size = Str("size"), Crust = Str("crust"), Toppings = toppings, Quantity = Int("quantity"),
+                Size = Str("size"), Crust = Str("crust"), Toppings = List("toppings"), Quantity = Int("quantity"),
                 Name = Str("name"), Fulfillment = Str("fulfillment"), Address = Str("address"),
             };
         }
@@ -244,7 +241,11 @@ namespace ElicitationServer
                 {
                     return Text($"Order not placed: the user chose {answer?.Action ?? "cancel"} on the order form.", isError: false);
                 }
+                var asked = PizzaShop.Missing(order);
                 order = PizzaShop.Merge(order, PizzaShop.Clean(PizzaShop.FromForm(answer.Content)));
+                // Toppings are optional in the form: if this form asked for them and the user
+                // picked none, that means plain cheese. A later form that didn't ask leaves them be.
+                if (asked.Contains("toppings") && order.Toppings is null) order = order with { Toppings = [] };
             }
 
             var missing = PizzaShop.Missing(order);
