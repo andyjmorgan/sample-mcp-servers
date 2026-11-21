@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <AssemblyName>SkillServer</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SampleMcp.Hosting\SampleMcp.Hosting.csproj" />
+    <PackageReference Include="ModelContextProtocol.Extensions.Skills" Version="$(McpSdkVersion)" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Skills\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

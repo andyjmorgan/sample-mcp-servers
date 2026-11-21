@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- The Skills, Tasks and MRTR APIs are experimental in SDK 2.4.0. -->
+    <NoWarn>$(NoWarn);MCPEXP001;MCPEXP002;MCPEXP004;MCPEXP005</NoWarn>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <PropertyGroup>
+    <McpSdkVersion>2.4.0</McpSdkVersion>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <AssemblyName>ElicitationServer</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SampleMcp.Hosting\SampleMcp.Hosting.csproj" />
+
+  </ItemGroup>
+</Project>

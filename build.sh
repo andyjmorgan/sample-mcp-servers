@@ -10,3 +10,10 @@ for s in timeserver dateserver uuidserver diceserver countserver wordserver hash
   docker push -q "$REGISTRY/$s:$TAG"
   docker push -q "$REGISTRY/$s:latest"
 done
+# C# servers (dotnet/): skillserver, taskserver, elicitationserver
+for p in SkillServer:skillserver TaskServer:taskserver ElicitationServer:elicitationserver; do
+  proj=${p%%:*} s=${p##*:}
+  docker build --build-arg SERVER=$proj -t "$REGISTRY/$s:$TAG" -t "$REGISTRY/$s:latest" dotnet
+  docker push -q "$REGISTRY/$s:$TAG"
+  docker push -q "$REGISTRY/$s:latest"
+done

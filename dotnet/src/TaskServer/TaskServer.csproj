@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <AssemblyName>TaskServer</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SampleMcp.Hosting\SampleMcp.Hosting.csproj" />
+    <PackageReference Include="ModelContextProtocol.Extensions.Tasks" Version="$(McpSdkVersion)" />
+  </ItemGroup>
+</Project>
