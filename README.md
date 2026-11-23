@@ -6,7 +6,7 @@ Thirteen tiny MCP servers for testing an MCP gateway: ten in Go (`cmd/`) and thr
 |---|---|---|---|---|---|
 | timeserver | `now` — `15:04:05 MST`, optional IANA `timezone` | 2025-03-26 | SSE | — | `https://mcp-time.donkeywork.dev/mcp` |
 | dateserver | `today` — `2026-10-30 (Friday)`, optional `timezone` | 2025-06-18 | plain JSON (`JSONResponse: true`) | — | `https://mcp-date.donkeywork.dev/mcp` |
-| uuidserver | `generate` — 1–20 v4 UUIDs (`count`) | 2024-11-05 | SSE | `X-Api-Key` | `https://mcp-uuid.donkeywork.dev/mcp` |
+| uuidserver | `generate` — 1–20 v4 UUIDs (`count`) | 2024-11-05 | SSE | OAuth or `X-Api-Key` | `https://mcp-uuid.donkeywork.dev/mcp` |
 | diceserver | `roll` — `count` 1–100, `sides` 2–1000 | 2026-07-28 (no initialize) | SSE | — | `https://mcp-dice.donkeywork.dev/mcp` |
 | countserver | `count` — 1..`n` with `delay_ms` pauses, `notifications/progress` when a progress token is sent | 2026-07-28 | SSE | — | `https://mcp-count.donkeywork.dev/mcp` |
 | wordserver | `random_word` (1–20 words), `reverse` (`text`), `word_count` (`text`) | 2025-03-26 | SSE | HTTP Basic only | `https://mcp-word.donkeywork.dev/mcp` |
@@ -49,7 +49,7 @@ Every request to `/mcp` needs `Authorization: Bearer <Keycloak access token>`. T
 
 An unauthenticated request gets `401` with `WWW-Authenticate: Bearer resource_metadata="…", scope="…"`. The Protected Resource Metadata at `/.well-known/oauth-protected-resource/mcp` points clients at Keycloak. There, a CIMD client (Claude Code, Claude Desktop, VS Code) requests the scope. An audience mapper on that client scope then puts the endpoint URL into `aud`.
 
-The uuidserver also requires `X-Api-Key` when `API_KEY` is set. That models a gateway injecting a header on top of OAuth.
+The uuidserver accepts either a token or `X-Api-Key` when `API_KEY` is set. A request with the right key skips OAuth, one with a wrong key gets `401`, and one with no key goes through the OAuth check. That models a server that a gateway can reach with a static key while users sign in directly.
 
 ### Non-OAuth schemes (word, hash, coin)
 
@@ -72,7 +72,7 @@ These three have no Keycloak in front of them; the credential is a static secret
 | `OAUTH_ISSUER` | realm issuer; when unset, OAuth is off (local dev) |
 | `OAUTH_JWKS_URL` | JWKS location, default `<issuer>/protocol/openid-connect/certs` |
 | `OAUTH_SCOPE` | required scope, advertised in PRM and `WWW-Authenticate` |
-| `API_KEY` | when set, requests must also send a matching `X-Api-Key` |
+| `API_KEY` | when set, requests must send a matching `X-Api-Key`; with `OAUTH_ISSUER` set, the key or a token is enough |
 | `BASIC_USER` / `BASIC_PASSWORD` | when set, requests must send matching HTTP Basic credentials |
 | `BEARER_TOKEN` | when set, requests must send `Authorization: Bearer <token>` (static; excludes `OAUTH_ISSUER`) |
 

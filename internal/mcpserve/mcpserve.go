@@ -42,7 +42,8 @@ type Spec struct {
 //	OAUTH_ISSUER    Keycloak realm issuer; enables bearer-token auth when set
 //	OAUTH_JWKS_URL  JWKS endpoint (default: <issuer>/protocol/openid-connect/certs)
 //	OAUTH_SCOPE     scope the token must carry (also advertised in PRM)
-//	API_KEY         when set, requests must also send a matching X-Api-Key
+//	API_KEY         when set, requests must send a matching X-Api-Key; with
+//	                OAUTH_ISSUER, the key or a valid token is enough
 //	BASIC_USER      with BASIC_PASSWORD, requests must send HTTP Basic credentials
 //	BASIC_PASSWORD  password for BASIC_USER
 //	BEARER_TOKEN    when set, requests must send Authorization: Bearer <this token>
@@ -107,15 +108,14 @@ func Run(spec Spec) {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
 
 	resource := cfg.PublicURL + "/mcp"
-	if cfg.APIKey != "" {
-		handler = requireAPIKey(cfg.APIKey, handler)
-	}
 	if cfg.BasicUser != "" {
 		handler = requireBasicAuth(cfg.BasicUser, cfg.BasicPassword, spec.Name, handler)
 	}
 	if cfg.BearerToken != "" {
 		handler = requireStaticBearer(cfg.BearerToken, handler)
 	}
+	// With OAuth on, API_KEY is an alternative to a token, not an extra check.
+	inner := handler
 	if cfg.Issuer != "" {
 		prmURL := cfg.PublicURL + "/.well-known/oauth-protected-resource/mcp"
 		var scopes []string
@@ -138,6 +138,13 @@ func Run(spec Spec) {
 			ResourceMetadataURL: prmURL,
 			Scopes:              scopes,
 		})(handler)
+	}
+	if cfg.APIKey != "" {
+		if cfg.Issuer != "" {
+			handler = apiKeyOr(cfg.APIKey, inner, handler)
+		} else {
+			handler = requireAPIKey(cfg.APIKey, handler)
+		}
 	}
 	mux.Handle("/mcp", handler)
 
@@ -224,6 +231,23 @@ func requireAPIKey(key string, next http.Handler) http.Handler {
 			return
 		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+// apiKeyOr lets a request with the right X-Api-Key straight through to next
+// and hands one without the header to otherwise (the OAuth check). A wrong
+// key is refused rather than passed on, so a typo is reported as such.
+func apiKeyOr(key string, next, otherwise http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := r.Header.Get("X-Api-Key")
+		switch {
+		case got == "":
+			otherwise.ServeHTTP(w, r)
+		case subtle.ConstantTimeCompare([]byte(got), []byte(key)) == 1:
+			next.ServeHTTP(w, r)
+		default:
+			http.Error(w, "invalid X-Api-Key", http.StatusUnauthorized)
+		}
 	})
 }
 

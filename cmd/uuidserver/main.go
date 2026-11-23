@@ -1,5 +1,5 @@
-// uuidserver speaks the oldest version, MCP 2024-11-05, and expects an
-// injected X-Api-Key header (set API_KEY). Tool: generate.
+// uuidserver speaks the oldest version, MCP 2024-11-05, and accepts either an
+// OAuth token or an X-Api-Key header (set API_KEY). Tool: generate.
 package main
 
 import (
